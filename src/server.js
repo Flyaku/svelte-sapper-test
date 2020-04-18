@@ -1,17 +1,49 @@
-import sirv from 'sirv';
-import polka from 'polka';
-import compression from 'compression';
-import * as sapper from '@sapper/server';
+import * as sapper from '@sapper/server'
+
+import compression from 'compression'
+import sirv        from 'sirv'
+import polka       from 'polka'
+
+import { getDB, closeConnection } from '../api/database/connection'
+
+import session from '../api/middleware/session'
 
 const { PORT, NODE_ENV } = process.env;
-const dev = NODE_ENV === 'development';
 
-polka() // You can also use Express
+const dev = NODE_ENV !== 'production';
+
+(async function server ()
+{
+	const db = await getDB();
+
+	polka() // You can also use Express
 	.use(
 		compression({ threshold: 0 }),
 		sirv('static', { dev }),
-		sapper.middleware()
+		function (req, res, next)
+		{
+			req.db = db;
+
+			return next();
+		},
+		session,
+		sapper.middleware(
+		{
+			session: function (req, res)
+			{
+				console.log('session ?', req.session);
+
+				return req.session || { };
+			}
+		})
 	)
-	.listen(PORT, err => {
-		if (err) console.log('error', err);
+	.listen(PORT, function (error)
+	{
+		if (error)
+		{
+			console.log('error', error);
+
+			closeConnection();
+		}
 	});
+})();
