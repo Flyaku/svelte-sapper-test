@@ -4,21 +4,21 @@ const url = 'mongodb://localhost:27017';
 
 const db_name = 'sapper-db';
 
-const client = new MongoClient(url);
+const client = new MongoClient(url, { useUnifiedTopology: true });
+
+let db;
 
 // Connexion à la base de données et récupération de l'instance
-export async function getDB ()
+export async function initDB ()
 {
 	await client.connect();
 
-	const db = client.db(db_name);
+	db = client.db(db_name);
 
-	return db;
+	return Promise.resolve([db, client]);
 }
 
-export function closeConnection ()
+export function getDB ()
 {
-	console.log('closing connection');
-
-	client.close();
+	return db;
 }

@@ -1,39 +1,62 @@
 import * as sapper from '@sapper/server'
 
 import compression from 'compression'
+import connect     from 'connect-mongo'
+import session     from 'express-session'
+import express     from 'express'
+import uniqid      from 'uniqid'
 import sirv        from 'sirv'
-import polka       from 'polka'
 
-import { getDB, closeConnection } from '../api/database/connection'
+import { initDB } from '../api/database/connection'
 
-import session from '../api/middleware/session'
+const MongoStore = connect(session);
 
 const { PORT, NODE_ENV } = process.env;
 
 const dev = NODE_ENV !== 'production';
 
+const secret = 'JcbA5XFESJUvqmFU6xhAEP57VHLQMBbuW6Q8bZiyzF3D38JpfnAAgGZhjgpz';
+
 (async function server ()
 {
-	const db = await getDB();
+	const [db, client] = await initDB();
 
-	polka() // You can also use Express
+	express()
 	.use(
 		compression({ threshold: 0 }),
 		sirv('static', { dev }),
-		function (req, res, next)
+		session(
 		{
-			req.db = db;
+			secret: secret,
 
-			return next();
-		},
-		session,
+			cookie:
+			{
+				path: '/',
+				httpOnly: true,
+				secure: false,
+				maxAge: null,
+				sameSite: true,
+				proxy: false
+			},
+
+			store: new MongoStore(
+			{
+				client: client,
+				dbName: 'sapper-db'
+			}),
+
+			genid: req => uniqid(),
+
+			resave: true,
+			saveUninitialized: true
+		}),
 		sapper.middleware(
 		{
 			session: function (req, res)
 			{
-				console.log('session ?', req.session);
+				console.log('session ?', req.session.user);
 
-				return req.session || { };
+				return (req.session || { }).user || { };
 			}
 		})
 	)
@@ -41,9 +64,9 @@ const dev = NODE_ENV !== 'production';
 	{
 		if (error)
 		{
-			console.log('error', error);
+			console.log(error);
 
-			closeConnection();
+			client.close();
 		}
 	});
 })();
